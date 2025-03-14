@@ -11,7 +11,6 @@ const getProfileData = async(username) => {
                 profile {
                   ranking
                   userAvatar
-                  realName
                   skillTags
                 }
               }
@@ -93,6 +92,42 @@ const getProblemSolved = async(username) => {
         return {
             status : 500,
             message: "Internal server error"
+        }
+    }
+}
+
+const getContestStats = async(username) => {
+    const query = {
+        query : `
+            query userContestRankingInfo($username: String!) {
+            userContestRanking(username: $username) {
+                attendedContestsCount
+                rating
+                globalRanking
+                topPercentage
+            }
+            }
+        `,
+        variables : { username }
+    };
+    try{
+        const response = await fetch(apiUrl, {
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json'
+            },
+            body: JSON.stringify(query)
+        });
+        const data = await response.json();
+        return {
+            status : 200,
+            message: 'Data fetched sucessfully',
+            data :  data.data.userContestRanking
+        }
+    }catch(error){
+        return {
+            status : 500,
+            message: 'Internal server Error'
         }
     }
 }
@@ -182,6 +217,39 @@ const getSkillStats = async(username) => {
     }
 }
 
+const calclulateLeetcodeScore = async(username) => {
+    const profile = await getProfileData(username)
+    if(profile.status != 200) return profile;
+
+    const probSolved = await getProblemSolved(username);
+    // problem solved calculation
+    const solvedCount = probSolved.data.matchedUser.submitStatsGlobal.acSubmissionNum
+    let easyProbSolved = solvedCount[1].count;
+    let medProbSolved = solvedCount[2].count;
+    let hardProbSolved = solvedCount[3].count;
+    console.log(easyProbSolved,medProbSolved,hardProbSolved)
+    easyProbSolved = easyProbSolved/probSolved.data.allQuestionsCount[1].count
+    medProbSolved = medProbSolved/probSolved.data.allQuestionsCount[2].count
+    hardProbSolved = hardProbSolved/probSolved.data.allQuestionsCount[3].count
+    let totScore = easyProbSolved*100 + medProbSolved*150 + hardProbSolved*200
+    // console.log(totScore)
+
+    // acceptance calculation
+    const acceptance = probSolved.data.matchedUser.problemsSolvedBeatsStats
+    // console.log(acceptance)
+    totScore = totScore + (acceptance[0].percentage + acceptance[1].percentage*1.5 + acceptance[2].percentage*2)
+    console.log(totScore)
+
+    // contest calculations
+    const contestStats = await getContestStats(username)
+    totScore = totScore + (contestStats.data.rating/3000)*200
+    console.log(totScore)
+
+
+}
+
+calclulateLeetcodeScore('arulcibi007')
+
 /*
 (async()=>{
     const values = await getSkillStats('DharunAP');
@@ -222,3 +290,21 @@ const getSkillStats = async(username) => {
     //   }
 })();
 */
+
+
+    // // Skill calculations
+    // const skills = await getSkillStats(username)
+    // let fundamental = 0, intermediate = 0, advanced = 0
+    // skills.data.tagProblemCounts.fundamental.forEach(element => {
+    //     fundamental += element.problemsSolved
+    // })
+    // console.log(fundamental)
+    // skills.data.tagProblemCounts.intermediate.forEach(element => {
+    //     intermediate += element.problemsSolved
+    // })
+    // console.log(intermediate)
+    // skills.data.tagProblemCounts.advanced.forEach(element => {
+    //     advanced += element.problemsSolved
+    // })
+    // console.log(advanced)
+    // // totScore = totScore + (fundamental + intermediate*1.25 + advanced*1.5)

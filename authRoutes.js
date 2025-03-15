@@ -2,29 +2,47 @@ const express = require("express");
 const axios = require("axios");
 const router = express.Router();
 const contexts = require('./context/cerdentails.js')
-const { OAuth2Client } = require("google-auth-library");
 
 const CLIENT_ID = contexts.client_id;
 const CLIENT_SECRET = contexts.client_secret;
 const REDIRECT_URI = contexts.redirect_uri;
 
-
-const client = new OAuth2Client(CLIENT_ID);
+// Initiates the Google Login flow
+router.get("/auth/google", (req, res) => {
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=profile email`;
+  res.redirect(url);
+});
 
 // Callback URL for handling the Google Login response
-router.post("/verify-token", async (req, res) => {
-  const { token } = req.body;
+router.get("/auth/google/callback", async (req, res) => {
+  const { code } = req.query;
 
   try {
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: CLIENT_ID,
+    // Exchange authorization code for access token
+    const { data } = await axios.post("https://oauth2.googleapis.com/token", {
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      code,
+      redirect_uri: REDIRECT_URI,
+      grant_type: "authorization_code",
     });
 
-    const payload = ticket.getPayload();
-    return res.json({ valid: true, user: payload });
+    const { access_token, id_token } = data;
+
+    // Use access_token or id_token to fetch user profile
+    const { data: profile } = await axios.get(
+      "https://www.googleapis.com/oauth2/v1/userinfo",
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }
+    );
+
+    // Code to handle user authentication and retrieval using the profile data
+
+    res.redirect("/");
   } catch (error) {
-    return res.status(401).json({ valid: false, message: "Invalid token" });
+    console.error("Error:", error.response.data.error);
+    res.redirect("/login");
   }
 });
 
